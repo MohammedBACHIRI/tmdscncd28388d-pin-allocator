@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TMDSCNCD28388D Smart Block Allocator &amp; Quick Pin Checklist</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #0f172a;
+      color: #f1f5f9;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Simple Clean Header -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center font-extrabold text-white mono text-xs shadow">
+          QUICK
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-white">TMDSCNCD28388D Quick Pin Block Allocator &amp; Bench Checklist</h1>
+          <p class="text-xs text-slate-400">Select and reserve individual HSEC pins, set GPIO direction (IN/OUT), and export your Bench Wiring CSV or C init function.</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs flex items-center gap-3 mono">
+          <span>Reserved: <strong id="countTotal" class="text-emerald-400">0</strong>/126</span>
+          <span>ADC/DAC: <strong id="countAnalog" class="text-amber-400">0</strong>/24</span>
+          <span>PWM: <strong id="countPwm" class="text-purple-400">0</strong>/33</span>
+        </div>
+        <button id="btnClearAll" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-white border border-slate-700 transition">
+          Clear All
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast Notification -->
+  <div id="toastBox" class="fixed bottom-4 right-4 z-50 hidden bg-emerald-900 border border-emerald-500 text-white px-4 py-2 rounded-xl shadow-xl text-xs font-semibold"></div>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl w-full mx-auto px-4 py-5 flex flex-col gap-5">
+
+
+
+    <!-- STEP 2 & STEP 3 SPLIT: LEFT = SIMPLE PIN CHECKLIST, RIGHT = BENCH WIRING SHEET & MINIMAL C CODE -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+      <!-- STEP 2: STREAMLINED PIN CHECKLIST (ONLY USABLE SIGNAL PINS, ZERO GND/RSV CLUTTER) -->
+      <section class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-sky-400 mono">Step 1 · Select & Reserve Pins (126 Signal Pins)</span>
+            <h2 class="text-sm font-bold text-white">Check any pin to reserve it, pick its function, and type your wire name</h2>
+          </div>
+          <input id="quickSearchInput" type="text" placeholder="Filter pin #, GPIO, EPWM, ADC, SPI..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white w-52 focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <!-- Category Tabs -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" data-cat="ALL" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white">All 126 Signal Pins</button>
+          <button type="button" data-cat="RESERVED" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-emerald-300 hover:bg-slate-700">My Reserved Pins</button>
+          <button type="button" data-cat="ANALOG" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-amber-300 hover:bg-slate-700">Analog: ADC / DAC / CMPSS (24)</button>
+          <button type="button" data-cat="PWM" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-purple-300 hover:bg-slate-700">ePWM Pins (33)</button>
+          <button type="button" data-cat="DIGITAL" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-sky-300 hover:bg-slate-700">Digital / Comm / GPIO (69)</button>
+        </div>
+
+        <!-- Live Conflict Alert Banner (if any) -->
+        <div id="simpleConflictBox" class="hidden rounded-xl bg-amber-950/70 border border-amber-600 px-3.5 py-2.5 text-xs text-amber-200"></div>
+
+        <!-- Pin Checklist Rows -->
+        <div id="pinChecklistContainer" class="flex flex-col gap-1.5 max-h-[540px] overflow-y-auto pr-1"></div>
+      </section>
+
+      <!-- STEP 3: INSTANT BENCH WIRING CHEAT SHEET + MINIMAL 20-LINE C INIT FUNCTION -->
+      <section class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-purple-400 mono">Step 2 · Ready-to-Use Output</span>
+            <h2 class="text-sm font-bold text-white">Bench Wiring Card &amp; Minimal `init_my_pins()` C Code</h2>
+          </div>
+          <div class="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800">
+            <button id="btnOutWiring" type="button" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-600 text-white">Bench Wiring Card</button>
+            <button id="btnOutCode" type="button" class="px-2.5 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-white">Minimal C Code</button>
+          </div>
+        </div>
+
+        <!-- Output View 1: Printable Bench Wiring Card -->
+        <div id="outWiringContainer" class="flex flex-col gap-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs text-slate-400">Physical HSEC pin numbers sorted for fast oscilloscope probing and baseboard wiring:</p>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <label for="inputImportWiringCsv" class="cursor-pointer px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white text-xs font-semibold border border-slate-700 transition">
+                Import CSV
+              </label>
+              <input id="inputImportWiringCsv" type="file" accept=".csv,text/csv" class="hidden">
+              <button id="btnCopyWiringCsv" type="button" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition">Copy CSV</button>
+              <button id="btnExportWiringCsv" type="button" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition">Export to CSV</button>
+            </div>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden max-h-[480px] overflow-y-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="bg-slate-900 text-[11px] uppercase text-slate-400 border-b border-slate-800 sticky top-0">
+                <tr>
+                  <th class="py-2 px-3">HSEC Pin</th>
+                  <th class="py-2 px-3">Your Wire Label</th>
+                  <th class="py-2 px-3">Dir</th>
+                  <th class="py-2 px-3">MCU Pin &amp; Function</th>
+                </tr>
+              </thead>
+              <tbody id="wiringTableBody" class="divide-y divide-slate-800/70 mono"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Output View 2: Minimal Copy-Paste C Code -->
+        <div id="outCodeContainer" class="hidden flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">Drop directly into your `main.c` — zero complex structs required:</span>
+            <div class="flex items-center gap-1.5">
+              <button id="btnCopySimpleCode" type="button" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700">Copy Code</button>
+              <button id="btnDownloadSimpleCode" type="button" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">Download `.h`</button>
+            </div>
+          </div>
+          <pre id="simpleCodePre" class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs mono text-emerald-300 overflow-x-auto max-h-[480px] leading-relaxed"></pre>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    const USABLE_PINS = [{"pin": 9, "sig": "ADC-A0", "gpio": null, "group": "ANALOG", "default_fn": "ADC1 (and/or DACA)", "options": [{"mux": "ANALOG", "fn": "ADCINA0 (ADC-A0)"}, {"mux": "ANALOG", "fn": "DACA_OUT (Buffered DAC A)"}, {"mux": "ANALOG", "fn": "ADCINA0 + CMPSS1"}], "warn": "Shared ADC-A0 / DACA"}, {"pin": 11, "sig": "ADC-A1", "gpio": null, "group": "ANALOG", "default_fn": "ADC1 (and/or DACB)", "options": [{"mux": "ANALOG", "fn": "ADCINA1 (ADC-A1)"}, {"mux": "ANALOG", "fn": "DACB_OUT (Buffered DAC B)"}, {"mux": "ANALOG", "fn": "ADCINA1 + CMPSS1"}], "warn": "Shared ADC-A1 / DACB"}, {"pin": 12, "sig": "ADC-B0", "gpio": null, "group": "ANALOG", "default_fn": "ADC2", "options": [{"mux": "ANALOG", "fn": "ADCINB0 (ADC-B0)"}, {"mux": "ANALOG", "fn": "ADCINB0 + CMPSS2"}], "warn": ""}, {"pin": 14, "sig": "ADC-B1", "gpio": null, "group": "ANALOG", "default_fn": "ADC2", "options": [{"mux": "ANALOG", "fn": "ADCINB1 (ADC-B1)"}, {"mux": "ANALOG", "fn": "ADCINB1 + CMPSS2"}], "warn": ""}, {"pin": 15, "sig": "ADC-A2", "gpio": null, "group": "ANALOG", "default_fn": "ADC1 (and/or CMPIN+)", "options": [{"mux": "ANALOG", "fn": "ADCINA2 + CMPIN1P (Hardware Trip)"}, {"mux": "ANALOG", "fn": "ADCINA2 (ADC-A2 Only)"}], "warn": "CMPIN+ Hardware Comparator Input"}, {"pin": 17, "sig": "ADC-A3", "gpio": null, "group": "ANALOG", "default_fn": "ADC1", "options": [{"mux": "ANALOG", "fn": "ADCINA3 (ADC-A3)"}, {"mux": "ANALOG", "fn": "ADCINA3 + CMPSS3"}], "warn": ""}, {"pin": 18, "sig": "ADC-B2", "gpio": null, "group": "ANALOG", "default_fn": "ADC2", "options": [{"mux": "ANALOG", "fn": "ADCINB2 (ADC-B2)"}, {"mux": "ANALOG", "fn": "ADCINB2 + CMPSS3"}], "warn": ""}, {"pin": 20, "sig": "ADC-B3", "gpio": null, "group": "ANALOG", "default_fn": "ADC2", "options": [{"mux": "ANALOG", "fn": "ADCINB3 (ADC-B3)"}, {"mux": "ANALOG", "fn": "ADCINB3 + CMPSS4"}], "warn": ""}, {"pin": 21, "sig": "ADC-A4", "gpio": null, "group": "ANALOG", "default_fn": "ADC1 (and/or CMPIN+)", "options": [{"mux": "ANALOG", "fn": "ADCINA4 + CMPIN2P (Hardware Trip)"}, {"mux": "ANALOG", "fn": "ADCINA4 (ADC-A4 Only)"}], "warn": "CMPIN+ Hardware Comparator Input"}, {"pin": 23, "sig": "ADC-A5", "gpio": null, "group": "ANALOG", "default_fn": "ADC1", "options": [{"mux": "ANALOG", "fn": "ADCINA5 (ADC-A5)"}, {"mux": "ANALOG", "fn": "ADCINA5 + CMPSS4"}], "warn": ""}, {"pin": 24, "sig": "ADC-B4", "gpio": null, "group": "ANALOG", "default_fn": "ADC2", "options": [{"mux": "ANALOG", "fn": "ADCINB4 (ADC-B4)"}, {"mux": "ANALOG", "fn": "ADCINB4 + CMPSS4"}], "warn": ""}, {"pin": 25, "sig": "ADCIN14", "gpio": null, "group": "ANALOG", "default_fn": "ADC (and/or CMPIN+)", "options": [{"mux": "ANALOG", "fn": "ADCIN14 + CMPIN4P (Hardware Trip)"}, {"mux": "ANALOG", "fn": "ADCIN14 (All ADCs)"}], "warn": "CMPIN+ Hardware Comparator Input"}, {"pin": 26, "sig": "ADC-B5", "gpio": null, "group": "ANALOG", "default_fn": "ADC2", "options": [{"mux": "ANALOG", "fn": "ADCINB5 (ADC-B5)"}], "warn": ""}, {"pin": 27, "sig": "ADCIN15", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCIN15 (All ADCs)"}, {"mux": "ANALOG", "fn": "ADCIN15 + CMPSS4"}], "warn": ""}, {"pin": 28, "sig": "ADC-D0", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCIND0 (ADC-D0)"}, {"mux": "ANALOG", "fn": "ADCIND0 + CMPSS7"}], "warn": ""}, {"pin": 30, "sig": "ADC-D1", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCIND1 (ADC-D1)"}, {"mux": "ANALOG", "fn": "ADCIND1 + CMPSS7"}], "warn": ""}, {"pin": 31, "sig": "ADC-C2", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCINC2 (ADC-C2)"}, {"mux": "ANALOG", "fn": "ADCINC2 + CMPSS5"}], "warn": ""}, {"pin": 33, "sig": "ADC-C3", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCINC3 (ADC-C3)"}, {"mux": "ANALOG", "fn": "ADCINC3 + CMPSS6"}], "warn": ""}, {"pin": 34, "sig": "ADC-D2", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCIND2 (ADC-D2)"}, {"mux": "ANALOG", "fn": "ADCIND2 + CMPSS7"}], "warn": ""}, {"pin": 36, "sig": "ADC-D3", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCIND3 (ADC-D3)"}, {"mux": "ANALOG", "fn": "ADCIND3 + CMPSS8"}], "warn": ""}, {"pin": 37, "sig": "ADC-C4", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCINC4 (ADC-C4)"}, {"mux": "ANALOG", "fn": "ADCINC4 + CMPSS6"}], "warn": ""}, {"pin": 39, "sig": "ADC-C5", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCINC5 (ADC-C5)"}, {"mux": "ANALOG", "fn": "ADCINC5 + CMPSS6"}], "warn": ""}, {"pin": 40, "sig": "ADC-D4", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCIND4 (ADC-D4)"}, {"mux": "ANALOG", "fn": "ADCIND4 + CMPSS8"}], "warn": ""}, {"pin": 42, "sig": "ADC-D5", "gpio": null, "group": "ANALOG", "default_fn": "ADC", "options": [{"mux": "ANALOG", "fn": "ADCIND5 (ADC-D5)"}, {"mux": "ANALOG", "fn": "ADCIND5 + CMPSS8"}], "warn": ""}, {"pin": 49, "sig": "GPIO-00", "gpio": "GPIO0", "group": "PWM", "default_fn": "PWM1A", "options": [{"mux": "1", "fn": "EPWM1A"}, {"mux": "0", "fn": "GPIO0"}, {"mux": "6", "fn": "I2CA_SDA"}, {"mux": "9", "fn": "CM-I2CA_SDA"}, {"mux": "10", "fn": "ESC_GPI0"}, {"mux": "13", "fn": "FSITXA_D0"}], "warn": ""}, {"pin": 50, "sig": "GPIO-04", "gpio": "GPIO4", "group": "PWM", "default_fn": "PWM3A", "options": [{"mux": "1", "fn": "EPWM3A"}, {"mux": "0", "fn": "GPIO4"}, {"mux": "5", "fn": "OUTPUTXBAR3"}, {"mux": "6", "fn": "CANA_TX"}, {"mux": "9", "fn": "MCAN_TX"}, {"mux": "10", "fn": "ESC_GPI4"}, {"mux": "13", "fn": "FSIRXA_D1"}], "warn": ""}, {"pin": 51, "sig": "GPIO-01", "gpio": "GPIO1", "group": "PWM", "default_fn": "PWM1B", "options": [{"mux": "1", "fn": "EPWM1B"}, {"mux": "0", "fn": "GPIO1"}, {"mux": "3", "fn": "MFSRB"}, {"mux": "6", "fn": "I2CA_SCL"}, {"mux": "9", "fn": "CM-I2CA_SCL"}, {"mux": "10", "fn": "ESC_GPI1"}, {"mux": "13", "fn": "FSITXA_D1"}], "warn": ""}, {"pin": 52, "sig": "GPIO-05", "gpio": "GPIO5", "group": "PWM", "default_fn": "PWM3B", "options": [{"mux": "1", "fn": "EPWM3B"}, {"mux": "0", "fn": "GPIO5"}, {"mux": "2", "fn": "MFSRA"}, {"mux": "3", "fn": "OUTPUTXBAR3"}, {"mux": "6", "fn": "CANA_RX"}, {"mux": "9", "fn": "MCAN_RX"}, {"mux": "10", "fn": "ESC_GPI5"}, {"mux": "13", "fn": "FSIRXA_CLK"}], "warn": ""}, {"pin": 53, "sig": "GPIO-02", "gpio": "GPIO2", "group": "PWM", "default_fn": "PWM2A", "options": [{"mux": "1", "fn": "EPWM2A"}, {"mux": "0", "fn": "GPIO2"}, {"mux": "5", "fn": "OUTPUTXBAR1"}, {"mux": "6", "fn": "I2CB_SDA"}, {"mux": "10", "fn": "ESC_GPI2"}, {"mux": "13", "fn": "FSITXA_CLK"}], "warn": ""}, {"pin": 54, "sig": "GPIO-06", "gpio": "GPIO6", "group": "PWM", "default_fn": "PWMA", "options": [{"mux": "1", "fn": "EPWM4A"}, {"mux": "0", "fn": "GPIO6"}, {"mux": "2", "fn": "OUTPUTXBAR4"}, {"mux": "3", "fn": "EXTSYNCOUT"}, {"mux": "5", "fn": "EQEP3_A"}, {"mux": "6", "fn": "CANB_TX"}, {"mux": "10", "fn": "ESC_GPI6"}, {"mux": "13", "fn": "FSITXB_D0"}], "warn": ""}, {"pin": 55, "sig": "GPIO-03", "gpio": "GPIO3", "group": "PWM", "default_fn": "PWM2B", "options": [{"mux": "1", "fn": "EPWM2B"}, {"mux": "0", "fn": "GPIO3"}, {"mux": "2", "fn": "OUTPUTXBAR2"}, {"mux": "3", "fn": "MCLKRB"}, {"mux": "5", "fn": "OUTPUTXBAR2"}, {"mux": "6", "fn": "I2CB_SCL"}, {"mux": "10", "fn": "ESC_GPI3"}, {"mux": "13", "fn": "FSIRXA_D0"}], "warn": ""}, {"pin": 56, "sig": "GPIO-07", "gpio": "GPIO7", "group": "PWM", "default_fn": "PWMB", "options": [{"mux": "1", "fn": "EPWM4B"}, {"mux": "0", "fn": "GPIO7"}, {"mux": "2", "fn": "MCLKRA"}, {"mux": "3", "fn": "OUTPUTXBAR5"}, {"mux": "5", "fn": "EQEP3_B"}, {"mux": "6", "fn": "CANB_RX"}, {"mux": "10", "fn": "ESC_GPI7"}, {"mux": "13", "fn": "FSITXB_D1"}], "warn": ""}, {"pin": 57, "sig": "GPIO-08", "gpio": "GPIO8", "group": "PWM", "default_fn": "PWMA", "options": [{"mux": "1", "fn": "EPWM5A"}, {"mux": "0", "fn": "GPIO8"}, {"mux": "2", "fn": "CANB_TX"}, {"mux": "3", "fn": "ADCSOCAO"}, {"mux": "5", "fn": "EQEP3_STROBE"}, {"mux": "6", "fn": "SCIA_TX"}, {"mux": "9", "fn": "MCAN_TX"}, {"mux": "10", "fn": "ESC_GPO0"}, {"mux": "13", "fn": "FSITXB_CLK"}, {"mux": "14", "fn": "FSITXA_D1"}, {"mux": "15", "fn": "FSIRXA_D0"}], "warn": ""}, {"pin": 58, "sig": "GPIO-12", "gpio": "GPIO12", "group": "PWM", "default_fn": "PWMA or TZ1", "options": [{"mux": "1", "fn": "EPWM7A"}, {"mux": "0", "fn": "GPIO12"}, {"mux": "2", "fn": "CANB_TX"}, {"mux": "3", "fn": "MDXB"}, {"mux": "5", "fn": "EQEP1_STROBE"}, {"mux": "6", "fn": "SCIC_TX"}, {"mux": "10", "fn": "ESC_GPO4"}, {"mux": "13", "fn": "FSIRXC_D0"}, {"mux": "14", "fn": "FSIRXA_D0"}], "warn": "Shares EPWM with External Trip-Zone TZ1"}, {"pin": 59, "sig": "GPIO-09", "gpio": "GPIO9", "group": "PWM", "default_fn": "PWMB", "options": [{"mux": "1", "fn": "EPWM5B"}, {"mux": "0", "fn": "GPIO9"}, {"mux": "2", "fn": "SCIB_TX"}, {"mux": "3", "fn": "OUTPUTXBAR6"}, {"mux": "5", "fn": "EQEP3_INDEX"}, {"mux": "6", "fn": "SCIA_RX"}, {"mux": "10", "fn": "ESC_GPO1"}, {"mux": "13", "fn": "FSIRXB_D0"}, {"mux": "14", "fn": "FSITXA_D0"}, {"mux": "15", "fn": "FSIRXA_CLK"}], "warn": ""}, {"pin": 60, "sig": "GPIO-13", "gpio": "GPIO13", "group": "PWM", "default_fn": "PWMB or TZ2", "options": [{"mux": "1", "fn": "EPWM7B"}, {"mux": "0", "fn": "GPIO13"}, {"mux": "2", "fn": "CANB_RX"}, {"mux": "3", "fn": "MDRB"}, {"mux": "5", "fn": "EQEP1_INDEX"}, {"mux": "6", "fn": "SCIC_RX"}, {"mux": "10", "fn": "ESC_GPO5"}, {"mux": "13", "fn": "FSIRXC_D1"}, {"mux": "14", "fn": "FSIRXA_CLK"}], "warn": "Shares EPWM with External Trip-Zone TZ2"}, {"pin": 61, "sig": "GPIO-10", "gpio": "GPIO10", "group": "PWM", "default_fn": "PWMA", "options": [{"mux": "1", "fn": "EPWM6A"}, {"mux": "0", "fn": "GPIO10"}, {"mux": "2", "fn": "CANB_RX"}, {"mux": "3", "fn": "ADCSOCBO"}, {"mux": "5", "fn": "EQEP1_A"}, {"mux": "6", "fn": "SCIB_TX"}, {"mux": "9", "fn": "MCAN_RX"}, {"mux": "10", "fn": "ESC_GPO2"}, {"mux": "13", "fn": "FSIRXB_D1"}, {"mux": "14", "fn": "FSITXA_CLK"}, {"mux": "15", "fn": "FSIRXA_D1"}], "warn": ""}, {"pin": 62, "sig": "GPIO-14", "gpio": "GPIO14", "group": "PWM", "default_fn": "PWMA or TZ3", "options": [{"mux": "1", "fn": "EPWM8A"}, {"mux": "0", "fn": "GPIO14"}, {"mux": "2", "fn": "SCIB_TX"}, {"mux": "3", "fn": "MCLKXB"}, {"mux": "6", "fn": "OUTPUTXBAR3"}, {"mux": "10", "fn": "ESC_GPO6"}, {"mux": "13", "fn": "FSIRXC_CLK"}], "warn": "Shares EPWM with External Trip-Zone TZ3"}, {"pin": 63, "sig": "GPIO-11", "gpio": "GPIO11", "group": "PWM", "default_fn": "PWMB", "options": [{"mux": "1", "fn": "EPWM6B"}, {"mux": "0", "fn": "GPIO11"}, {"mux": "2", "fn": "SCIB_RX"}, {"mux": "3", "fn": "OUTPUTXBAR7"}, {"mux": "5", "fn": "EQEP1_B"}, {"mux": "6", "fn": "SCIB_RX"}, {"mux": "10", "fn": "ESC_GPO3"}, {"mux": "13", "fn": "FSIRXB_CLK"}, {"mux": "14", "fn": "FSIRXA_D1"}], "warn": ""}, {"pin": 64, "sig": "GPIO-15", "gpio": "GPIO15", "group": "PWM", "default_fn": "PWMB or TZ4", "options": [{"mux": "1", "fn": "EPWM8B"}, {"mux": "0", "fn": "GPIO15"}, {"mux": "2", "fn": "SCIB_RX"}, {"mux": "3", "fn": "MFSXB"}, {"mux": "6", "fn": "OUTPUTXBAR4"}, {"mux": "10", "fn": "ESC_GPO7"}, {"mux": "13", "fn": "FSIRXD_D0"}], "warn": "Shares EPWM with External Trip-Zone TZ4"}, {"pin": 67, "sig": "GPIO-16", "gpio": "GPIO16", "group": "PWM", "default_fn": "SPISIMO", "options": [{"mux": "1", "fn": "SPIA_SIMO"}, {"mux": "0", "fn": "GPIO16"}, {"mux": "2", "fn": "CANB_TX"}, {"mux": "3", "fn": "OUTPUTXBAR7"}, {"mux": "5", "fn": "EPWM9A"}, {"mux": "7", "fn": "SD1_D1"}, {"mux": "11", "fn": "SSIA_TX"}, {"mux": "13", "fn": "FSIRXD_D1"}], "warn": ""}, {"pin": 68, "sig": "GPIO-20", "gpio": "GPIO20", "group": "PWM", "default_fn": "QEPA or McBSP-MDX", "options": [{"mux": "1", "fn": "EQEP1_A"}, {"mux": "0", "fn": "GPIO20"}, {"mux": "2", "fn": "MDXA"}, {"mux": "3", "fn": "CANB_TX"}, {"mux": "5", "fn": "EPWM11A"}, {"mux": "7", "fn": "SD1_D3"}, {"mux": "10", "fn": "EMIF1_BA0"}, {"mux": "11", "fn": "TRACE_DATA0"}, {"mux": "13", "fn": "FSIRXE_CLK"}, {"mux": "14", "fn": "SPIC_SIMO"}], "warn": ""}, {"pin": 69, "sig": "GPIO-17", "gpio": "GPIO17", "group": "PWM", "default_fn": "SPISOMI", "options": [{"mux": "1", "fn": "SPIA_SOMI"}, {"mux": "0", "fn": "GPIO17"}, {"mux": "2", "fn": "CANB_RX"}, {"mux": "3", "fn": "OUTPUTXBAR8"}, {"mux": "5", "fn": "EPWM9B"}, {"mux": "7", "fn": "SD1_C1"}, {"mux": "11", "fn": "SSIA_RX"}, {"mux": "13", "fn": "FSIRXD_CLK"}], "warn": ""}, {"pin": 70, "sig": "GPIO-21", "gpio": "GPIO21", "group": "PWM", "default_fn": "QEPB or McBSP-MDR", "options": [{"mux": "1", "fn": "EQEP1_B"}, {"mux": "0", "fn": "GPIO21"}, {"mux": "2", "fn": "MDRA"}, {"mux": "3", "fn": "CANB_RX"}, {"mux": "5", "fn": "EPWM11B"}, {"mux": "7", "fn": "SD1_C3"}, {"mux": "10", "fn": "EMIF1_BA1"}, {"mux": "11", "fn": "TRACE_DATA1"}, {"mux": "13", "fn": "FSIRXF_D0"}, {"mux": "14", "fn": "SPIC_SOMI"}], "warn": ""}, {"pin": 71, "sig": "GPIO-18", "gpio": "GPIO18", "group": "PWM", "default_fn": "SPICLK", "options": [{"mux": "1", "fn": "SPIA_CLK"}, {"mux": "0", "fn": "GPIO18"}, {"mux": "2", "fn": "SCIB_TX"}, {"mux": "3", "fn": "CANA_RX"}, {"mux": "5", "fn": "EPWM10A"}, {"mux": "7", "fn": "SD1_D2"}, {"mux": "9", "fn": "MCAN_RX"}, {"mux": "10", "fn": "EMIF1_CS2n"}, {"mux": "11", "fn": "SSIA_CLK"}, {"mux": "13", "fn": "FSIRXE_D0"}], "warn": ""}, {"pin": 72, "sig": "GPIO-22", "gpio": "GPIO22", "group": "PWM", "default_fn": "QEPS or McBSP-MCLKX", "options": [{"mux": "1", "fn": "EQEP1_STROBE"}, {"mux": "0", "fn": "GPIO22"}, {"mux": "2", "fn": "MCLKXA"}, {"mux": "3", "fn": "SCIB_TX"}, {"mux": "5", "fn": "EPWM12A"}, {"mux": "6", "fn": "SPIB_CLK"}, {"mux": "7", "fn": "SD1_D4"}, {"mux": "9", "fn": "MCAN_TX"}, {"mux": "10", "fn": "EMIF1_RAS"}, {"mux": "11", "fn": "TRACE_DATA2"}, {"mux": "13", "fn": "FSIRXF_D1"}, {"mux": "14", "fn": "SPIC_CLK"}], "warn": ""}, {"pin": 73, "sig": "GPIO-19", "gpio": "GPIO19", "group": "PWM", "default_fn": "SPISTE", "options": [{"mux": "1", "fn": "SPIA_STEn"}, {"mux": "0", "fn": "GPIO19"}, {"mux": "2", "fn": "SCIB_RX"}, {"mux": "3", "fn": "CANA_TX"}, {"mux": "5", "fn": "EPWM10B"}, {"mux": "7", "fn": "SD1_C2"}, {"mux": "9", "fn": "MCAN_TX"}, {"mux": "10", "fn": "EMIF1_CS3n"}, {"mux": "11", "fn": "SSIA_FSS"}, {"mux": "13", "fn": "FSIRXE_D1"}], "warn": ""}, {"pin": 74, "sig": "GPIO-23", "gpio": "GPIO23", "group": "PWM", "default_fn": "QEPI or McBSP-MFSX", "options": [{"mux": "1", "fn": "EQEP1_INDEX"}, {"mux": "0", "fn": "GPIO23"}, {"mux": "2", "fn": "MFSXA"}, {"mux": "3", "fn": "SCIB_RX"}, {"mux": "5", "fn": "EPWM12B"}, {"mux": "6", "fn": "SPIB_STEn"}, {"mux": "7", "fn": "SD1_C4"}, {"mux": "9", "fn": "MCAN_RX"}, {"mux": "10", "fn": "EMIF1_CAS"}, {"mux": "11", "fn": "TRACE_DATA3"}, {"mux": "13", "fn": "FSIRXF_CLK"}, {"mux": "14", "fn": "SPIC_STEn"}], "warn": ""}, {"pin": 75, "sig": "GPIO-24", "gpio": "GPIO24", "group": "PWM", "default_fn": "eCAP or SPISIMO", "options": [{"mux": "1", "fn": "OUTPUTXBAR1"}, {"mux": "0", "fn": "GPIO24"}, {"mux": "2", "fn": "EQEP2_A"}, {"mux": "3", "fn": "MDXB"}, {"mux": "6", "fn": "SPIB_SIMO"}, {"mux": "7", "fn": "SD2_D1"}, {"mux": "9", "fn": "PMBUSA_SCL"}, {"mux": "10", "fn": "EMIF1_DQM0"}, {"mux": "11", "fn": "TRACE_CLK"}, {"mux": "13", "fn": "EPWM13A"}, {"mux": "15", "fn": "FSIRXG_D0"}], "warn": ""}, {"pin": 76, "sig": "GPIO-28##", "gpio": "GPIO28", "group": "PWM", "default_fn": "SCIRX / UARTRX", "options": [{"mux": "1", "fn": "SCIA_RX"}, {"mux": "0", "fn": "GPIO28"}, {"mux": "2", "fn": "EMIF1_CS4n"}, {"mux": "5", "fn": "OUTPUTXBAR5"}, {"mux": "6", "fn": "EQEP3_A"}, {"mux": "7", "fn": "SD2_D3"}, {"mux": "9", "fn": "EMIF1_CS2n"}, {"mux": "13", "fn": "EPWM15A"}, {"mux": "15", "fn": "FSIRXH_D1"}], "warn": "Isolated XDS110 USB-UART (SCIA)"}, {"pin": 77, "sig": "GPIO-25", "gpio": "GPIO25", "group": "PWM", "default_fn": "eCAP or SPISOMI", "options": [{"mux": "1", "fn": "OUTPUTXBAR2"}, {"mux": "0", "fn": "GPIO25"}, {"mux": "2", "fn": "EQEP2_B"}, {"mux": "3", "fn": "MDRB"}, {"mux": "6", "fn": "SPIB_SOMI"}, {"mux": "7", "fn": "SD2_C1"}, {"mux": "9", "fn": "PMBUSA_SDA"}, {"mux": "10", "fn": "EMIF1_DQM1"}, {"mux": "11", "fn": "TRACE_SWO"}, {"mux": "13", "fn": "EPWM13B"}, {"mux": "14", "fn": "FSITXA_D1"}, {"mux": "15", "fn": "FSIRXG_D1"}], "warn": ""}, {"pin": 78, "sig": "GPIO-29##", "gpio": "GPIO29", "group": "PWM", "default_fn": "SCITX / UARTTX", "options": [{"mux": "1", "fn": "SCIA_TX"}, {"mux": "0", "fn": "GPIO29"}, {"mux": "2", "fn": "EMIF1_SDCKE"}, {"mux": "5", "fn": "OUTPUTXBAR6"}, {"mux": "6", "fn": "EQEP3_B"}, {"mux": "7", "fn": "SD2_C3"}, {"mux": "9", "fn": "EMIF1_CS3n"}, {"mux": "10", "fn": "ESC_LATCH0"}, {"mux": "11", "fn": "ESC_I2C_SDA"}, {"mux": "13", "fn": "EPWM15B"}, {"mux": "14", "fn": "ESC_SYNC0"}, {"mux": "15", "fn": "FSIRXH_CLK"}], "warn": "Isolated XDS110 USB-UART (SCIA)"}, {"pin": 79, "sig": "GPIO-26", "gpio": "GPIO26", "group": "PWM", "default_fn": "eCAP or SPICLK", "options": [{"mux": "1", "fn": "OUTPUTXBAR3"}, {"mux": "0", "fn": "GPIO26"}, {"mux": "2", "fn": "EQEP2_INDEX"}, {"mux": "3", "fn": "MCLKXB"}, {"mux": "5", "fn": "OUTPUTXBAR3"}, {"mux": "6", "fn": "SPIB_CLK"}, {"mux": "7", "fn": "SD2_D2"}, {"mux": "9", "fn": "PMBUSA_ALERT"}, {"mux": "10", "fn": "EMIF1_DQM2"}, {"mux": "11", "fn": "ESC_MDIO_CLK"}, {"mux": "13", "fn": "EPWM14A"}, {"mux": "14", "fn": "FSITXA_D0"}, {"mux": "15", "fn": "FSIRXG_CLK"}], "warn": ""}, {"pin": 80, "sig": "GPIO-30", "gpio": "GPIO30", "group": "PWM", "default_fn": "CANRX", "options": [{"mux": "1", "fn": "CANA_RX"}, {"mux": "0", "fn": "GPIO30"}, {"mux": "2", "fn": "EMIF1_CLK"}, {"mux": "3", "fn": "MCAN_RX"}, {"mux": "5", "fn": "OUTPUTXBAR7"}, {"mux": "6", "fn": "EQEP3_STROBE"}, {"mux": "7", "fn": "SD2_D4"}, {"mux": "9", "fn": "EMIF1_CS4n"}, {"mux": "10", "fn": "ESC_LATCH1"}, {"mux": "11", "fn": "ESC_I2C_SCL"}, {"mux": "13", "fn": "EPWM16A"}, {"mux": "14", "fn": "ESC_SYNC1"}, {"mux": "15", "fn": "SPID_SIMO"}], "warn": ""}, {"pin": 81, "sig": "GPIO-27", "gpio": "GPIO27", "group": "PWM", "default_fn": "eCAP or SPISTE", "options": [{"mux": "1", "fn": "OUTPUTXBAR4"}, {"mux": "0", "fn": "GPIO27"}, {"mux": "2", "fn": "EQEP2_STROBE"}, {"mux": "3", "fn": "MFSXB"}, {"mux": "5", "fn": "OUTPUTXBAR4"}, {"mux": "6", "fn": "SPIB_STEn"}, {"mux": "7", "fn": "SD2_C2"}, {"mux": "9", "fn": "PMBUSA_CTL"}, {"mux": "10", "fn": "EMIF1_DQM3"}, {"mux": "11", "fn": "ESC_MDIO_DATA"}, {"mux": "13", "fn": "EPWM14B"}, {"mux": "14", "fn": "FSITXA_CLK"}, {"mux": "15", "fn": "FSIRXH_D0"}], "warn": ""}, {"pin": 82, "sig": "GPIO-31**", "gpio": "GPIO31", "group": "PWM", "default_fn": "CANTX", "options": [{"mux": "1", "fn": "CANA_TX"}, {"mux": "0", "fn": "GPIO31"}, {"mux": "2", "fn": "EMIF1_WEn"}, {"mux": "3", "fn": "MCAN_TX"}, {"mux": "5", "fn": "OUTPUTXBAR8"}, {"mux": "6", "fn": "EQEP3_INDEX"}, {"mux": "7", "fn": "SD2_C4"}, {"mux": "9", "fn": "EMIF1_RNW"}, {"mux": "10", "fn": "I2CA_SDA"}, {"mux": "11", "fn": "CM-I2CA_SDA"}, {"mux": "13", "fn": "EPWM16B"}, {"mux": "15", "fn": "SPID_SOMI"}], "warn": "Shares Onboard LED1 with CANA_TX / EPWM16B"}, {"pin": 85, "sig": "GPIO-32", "gpio": "GPIO32", "group": "DIGITAL", "default_fn": "I2CSDA", "options": [{"mux": "1", "fn": "I2CA_SDA"}, {"mux": "0", "fn": "GPIO32"}, {"mux": "2", "fn": "EMIF1_CS0n"}, {"mux": "3", "fn": "SPIA_SIMO"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR1"}, {"mux": "9", "fn": "EMIF1_OEn"}, {"mux": "10", "fn": "I2CA_SCL"}, {"mux": "11", "fn": "CM-I2CA_SCL"}, {"mux": "15", "fn": "SPID_CLK"}], "warn": ""}, {"pin": 86, "sig": "GPIO-34**", "gpio": "GPIO34", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO34"}, {"mux": "1", "fn": "OUTPUTXBAR1"}, {"mux": "2", "fn": "EMIF1_CS2n"}, {"mux": "3", "fn": "SPIA_CLK"}, {"mux": "6", "fn": "I2CB_SDA"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR3"}, {"mux": "9", "fn": "EMIF1_BA1"}, {"mux": "10", "fn": "ESC_LATCH0"}, {"mux": "11", "fn": "ENET_MII_CRS"}, {"mux": "13", "fn": "SCIA_TX"}, {"mux": "14", "fn": "ESC_SYNC0"}], "warn": "Connected to Onboard LED2"}, {"pin": 87, "sig": "GPIO-33", "gpio": "GPIO33", "group": "DIGITAL", "default_fn": "I2CSCL", "options": [{"mux": "1", "fn": "I2CA_SCL"}, {"mux": "0", "fn": "GPIO33"}, {"mux": "2", "fn": "EMIF1_RNW"}, {"mux": "3", "fn": "SPIA_SOMI"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR2"}, {"mux": "9", "fn": "EMIF1_BA0"}, {"mux": "15", "fn": "SPID_STEn"}], "warn": ""}, {"pin": 88, "sig": "GPIO39", "gpio": "GPIO39", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO39"}, {"mux": "2", "fn": "EMIF1_A1"}, {"mux": "5", "fn": "SCIC_RX"}, {"mux": "6", "fn": "CANB_RX"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR8"}, {"mux": "9", "fn": "EMIF1_A4"}, {"mux": "10", "fn": "ENET_MII_RX_ERR"}, {"mux": "11", "fn": "ENET_MII_COL"}, {"mux": "13", "fn": "SD1_D4"}], "warn": ""}, {"pin": 89, "sig": "GPIO40", "gpio": "GPIO40", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO40"}, {"mux": "2", "fn": "EMIF1_A2"}, {"mux": "6", "fn": "I2CB_SDA"}, {"mux": "11", "fn": "ENET_MII_CRS"}, {"mux": "14", "fn": "ESC_I2C_SDA"}], "warn": ""}, {"pin": 90, "sig": "GPIO125", "gpio": "GPIO125", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO125"}, {"mux": "3", "fn": "EMIF2_D12"}, {"mux": "6", "fn": "SPIC_STEn"}, {"mux": "7", "fn": "SD1_C2"}, {"mux": "10", "fn": "ESC_GPI25"}, {"mux": "13", "fn": "FSIRXE_D1"}, {"mux": "14", "fn": "ESC_LATCH0"}], "warn": ""}, {"pin": 91, "sig": "GPIO41", "gpio": "GPIO41", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO41"}, {"mux": "2", "fn": "EMIF1_A3"}, {"mux": "6", "fn": "I2CB_SCL"}, {"mux": "10", "fn": "ENET_REVMII_MDIO_RST"}, {"mux": "11", "fn": "ENET_MII_COL"}, {"mux": "14", "fn": "ESC_I2C_SCL"}], "warn": ""}, {"pin": 92, "sig": "GPIO45", "gpio": "GPIO45", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO45"}, {"mux": "2", "fn": "EMIF1_A5"}, {"mux": "11", "fn": "ENET_MII_TX_EN"}, {"mux": "14", "fn": "ESC_TX1_ENA"}], "warn": ""}, {"pin": 93, "sig": "GPIO96", "gpio": "GPIO96", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO96"}, {"mux": "3", "fn": "EMIF2_DQM1"}, {"mux": "5", "fn": "EQEP1_A"}, {"mux": "13", "fn": "FSIRXG_CLK"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR6"}], "warn": ""}, {"pin": 94, "sig": "GPIO97", "gpio": "GPIO97", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO97"}, {"mux": "3", "fn": "EMIF2_DQM0"}, {"mux": "5", "fn": "EQEP1_B"}, {"mux": "13", "fn": "FSIRXH_D0"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR7"}], "warn": ""}, {"pin": 95, "sig": "GPIO98", "gpio": "GPIO98", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO98"}, {"mux": "3", "fn": "EMIF2_A0"}, {"mux": "5", "fn": "EQEP1_STROBE"}, {"mux": "13", "fn": "FSIRXH_D1"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR8"}], "warn": ""}, {"pin": 96, "sig": "GPIO99", "gpio": "GPIO99", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO99"}, {"mux": "3", "fn": "EMIF2_A1"}, {"mux": "5", "fn": "EQEP1_INDEX"}, {"mux": "13", "fn": "FSIRXH_CLK"}], "warn": ""}, {"pin": 99, "sig": "GPIO-48", "gpio": "GPIO48", "group": "DIGITAL", "default_fn": "SD-D", "options": [{"mux": "0", "fn": "GPIO48"}, {"mux": "1", "fn": "OUTPUTXBAR3"}, {"mux": "2", "fn": "EMIF1_A8"}, {"mux": "6", "fn": "SCIA_TX"}, {"mux": "7", "fn": "SD1_D1"}, {"mux": "11", "fn": "ENET_PPS1"}, {"mux": "14", "fn": "ESC_PHY_CLK"}], "warn": ""}, {"pin": 100, "sig": "GPIO-54", "gpio": "GPIO54", "group": "DIGITAL", "default_fn": "QEPA", "options": [{"mux": "0", "fn": "GPIO54"}, {"mux": "1", "fn": "SPIA_SIMO"}, {"mux": "2", "fn": "EMIF1_D30"}, {"mux": "3", "fn": "EMIF2_D14"}, {"mux": "5", "fn": "EQEP2_A"}, {"mux": "6", "fn": "SCIB_TX"}, {"mux": "7", "fn": "SD1_D4"}, {"mux": "9", "fn": "EMIF1_A10"}, {"mux": "11", "fn": "ENET_MII_RX_DATA2"}, {"mux": "13", "fn": "SD1_C2"}, {"mux": "14", "fn": "FSIRXA_CLK"}, {"mux": "15", "fn": "SSIA_TX"}], "warn": ""}, {"pin": 101, "sig": "GPIO-49", "gpio": "GPIO49", "group": "DIGITAL", "default_fn": "SD-C", "options": [{"mux": "0", "fn": "GPIO49"}, {"mux": "1", "fn": "OUTPUTXBAR4"}, {"mux": "2", "fn": "EMIF1_A9"}, {"mux": "6", "fn": "SCIA_RX"}, {"mux": "7", "fn": "SD1_C1"}, {"mux": "9", "fn": "EMIF1_A5"}, {"mux": "11", "fn": "ENET_MII_RX_CLK"}, {"mux": "13", "fn": "SD2_D1"}, {"mux": "14", "fn": "FSITXA_D0"}], "warn": ""}, {"pin": 102, "sig": "GPIO-55", "gpio": "GPIO55", "group": "DIGITAL", "default_fn": "QEPB", "options": [{"mux": "0", "fn": "GPIO55"}, {"mux": "1", "fn": "SPIA_SOMI"}, {"mux": "2", "fn": "EMIF1_D29"}, {"mux": "3", "fn": "EMIF2_D13"}, {"mux": "5", "fn": "EQEP2_B"}, {"mux": "6", "fn": "SCIB_RX"}, {"mux": "7", "fn": "SD1_C4"}, {"mux": "9", "fn": "EMIF1_D0"}, {"mux": "11", "fn": "ENET_MII_RX_DATA3"}, {"mux": "13", "fn": "SD1_C3"}, {"mux": "14", "fn": "FSITXB_D0"}, {"mux": "15", "fn": "SSIA_RX"}], "warn": ""}, {"pin": 103, "sig": "GPIO-50", "gpio": "GPIO50", "group": "DIGITAL", "default_fn": "SD-D", "options": [{"mux": "0", "fn": "GPIO50"}, {"mux": "1", "fn": "EQEP1_A"}, {"mux": "2", "fn": "EMIF1_A10"}, {"mux": "6", "fn": "SPIC_SIMO"}, {"mux": "7", "fn": "SD1_D2"}, {"mux": "9", "fn": "EMIF1_A6"}, {"mux": "11", "fn": "ENET_MII_RX_DV"}, {"mux": "13", "fn": "SD2_D2"}, {"mux": "14", "fn": "FSITXA_D1"}], "warn": ""}, {"pin": 104, "sig": "GPIO-56", "gpio": "GPIO56", "group": "DIGITAL", "default_fn": "QEPS", "options": [{"mux": "0", "fn": "GPIO56"}, {"mux": "1", "fn": "SPIA_CLK"}, {"mux": "2", "fn": "EMIF1_D28"}, {"mux": "3", "fn": "EMIF2_D12"}, {"mux": "5", "fn": "EQEP2_STROBE"}, {"mux": "6", "fn": "SCIC_TX"}, {"mux": "7", "fn": "SD2_D1"}, {"mux": "9", "fn": "EMIF1_D1"}, {"mux": "10", "fn": "I2CA_SDA"}, {"mux": "11", "fn": "ENET_MII_TX_EN"}, {"mux": "13", "fn": "SD1_C4"}, {"mux": "14", "fn": "FSITXB_CLK"}, {"mux": "15", "fn": "SSIA_CLK"}], "warn": ""}, {"pin": 105, "sig": "GPIO-51", "gpio": "GPIO51", "group": "DIGITAL", "default_fn": "SD-C", "options": [{"mux": "0", "fn": "GPIO51"}, {"mux": "1", "fn": "EQEP1_B"}, {"mux": "2", "fn": "EMIF1_A11"}, {"mux": "6", "fn": "SPIC_SOMI"}, {"mux": "7", "fn": "SD1_C2"}, {"mux": "9", "fn": "EMIF1_A7"}, {"mux": "11", "fn": "ENET_MII_RX_ERR"}, {"mux": "13", "fn": "SD2_D3"}, {"mux": "14", "fn": "FSITXA_CLK"}], "warn": ""}, {"pin": 106, "sig": "GPIO-57", "gpio": "GPIO57", "group": "DIGITAL", "default_fn": "QEPI", "options": [{"mux": "0", "fn": "GPIO57"}, {"mux": "1", "fn": "SPIA_STEn"}, {"mux": "2", "fn": "EMIF1_D27"}, {"mux": "3", "fn": "EMIF2_D11"}, {"mux": "5", "fn": "EQEP2_INDEX"}, {"mux": "6", "fn": "SCIC_RX"}, {"mux": "7", "fn": "SD2_C1"}, {"mux": "9", "fn": "EMIF1_D2"}, {"mux": "10", "fn": "I2CA_SCL"}, {"mux": "11", "fn": "ENET_MII_TX_ERR"}, {"mux": "14", "fn": "FSITXB_D1"}, {"mux": "15", "fn": "SSIA_FSS"}], "warn": ""}, {"pin": 107, "sig": "GPIO-52", "gpio": "GPIO52", "group": "DIGITAL", "default_fn": "SD-D", "options": [{"mux": "0", "fn": "GPIO52"}, {"mux": "1", "fn": "EQEP1_STROBE"}, {"mux": "2", "fn": "EMIF1_A12"}, {"mux": "6", "fn": "SPIC_CLK"}, {"mux": "7", "fn": "SD1_D3"}, {"mux": "9", "fn": "EMIF1_A8"}, {"mux": "11", "fn": "ENET_MII_RX_DATA0"}, {"mux": "13", "fn": "SD2_D4"}, {"mux": "14", "fn": "FSIRXA_D0"}], "warn": ""}, {"pin": 108, "sig": "GPIO-58", "gpio": "GPIO58", "group": "DIGITAL", "default_fn": "GPIO or McBSP-MCLKR", "options": [{"mux": "1", "fn": "MCLKRA"}, {"mux": "0", "fn": "GPIO58"}, {"mux": "2", "fn": "EMIF1_D26"}, {"mux": "3", "fn": "EMIF2_D10"}, {"mux": "5", "fn": "OUTPUTXBAR1"}, {"mux": "6", "fn": "SPIB_CLK"}, {"mux": "7", "fn": "SD2_D2"}, {"mux": "9", "fn": "EMIF1_D3"}, {"mux": "10", "fn": "ESC_LED_LINK0_ACTIVE"}, {"mux": "11", "fn": "ENET_MII_TX_CLK"}, {"mux": "13", "fn": "SD2_C2"}, {"mux": "14", "fn": "FSIRXB_D0"}, {"mux": "15", "fn": "SPIA_SIMO"}], "warn": ""}, {"pin": 109, "sig": "GPIO-53", "gpio": "GPIO53", "group": "DIGITAL", "default_fn": "SD-C", "options": [{"mux": "0", "fn": "GPIO53"}, {"mux": "1", "fn": "EQEP1_INDEX"}, {"mux": "2", "fn": "EMIF1_D31"}, {"mux": "3", "fn": "EMIF2_D15"}, {"mux": "6", "fn": "SPIC_STEn"}, {"mux": "7", "fn": "SD1_C3"}, {"mux": "9", "fn": "EMIF1_A9"}, {"mux": "11", "fn": "ENET_MII_RX_DATA1"}, {"mux": "13", "fn": "SD1_C1"}, {"mux": "14", "fn": "FSIRXA_D1"}], "warn": ""}, {"pin": 110, "sig": "GPIO-59", "gpio": "GPIO59", "group": "DIGITAL", "default_fn": "GPIO or McBSP-MFSR", "options": [{"mux": "1", "fn": "MFSRA"}, {"mux": "0", "fn": "GPIO59"}, {"mux": "2", "fn": "EMIF1_D25"}, {"mux": "3", "fn": "EMIF2_D9"}, {"mux": "5", "fn": "OUTPUTXBAR2"}, {"mux": "6", "fn": "SPIB_STEn"}, {"mux": "7", "fn": "SD2_C2"}, {"mux": "9", "fn": "EMIF1_D4"}, {"mux": "10", "fn": "ESC_LED_LINK1_ACTIVE"}, {"mux": "11", "fn": "ENET_MII_TX_DATA0"}, {"mux": "13", "fn": "SD2_C3"}, {"mux": "14", "fn": "FSIRXB_D1"}, {"mux": "15", "fn": "SPIA_SOMI"}], "warn": ""}, {"pin": 121, "sig": "GPIO35", "gpio": "GPIO35", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO35"}, {"mux": "1", "fn": "SCIA_RX"}, {"mux": "2", "fn": "EMIF1_CS3n"}, {"mux": "3", "fn": "SPIA_STEn"}, {"mux": "6", "fn": "I2CB_SCL"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR4"}, {"mux": "9", "fn": "EMIF1_A0"}, {"mux": "10", "fn": "ESC_LATCH1"}, {"mux": "11", "fn": "ENET_MII_COL"}, {"mux": "14", "fn": "ESC_SYNC1"}], "warn": ""}, {"pin": 122, "sig": "GPIO36", "gpio": "GPIO36", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO36"}, {"mux": "1", "fn": "SCIA_TX"}, {"mux": "2", "fn": "EMIF1_WAIT"}, {"mux": "6", "fn": "CANA_RX"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR5"}, {"mux": "9", "fn": "EMIF1_A1"}, {"mux": "10", "fn": "MCAN_RX"}, {"mux": "13", "fn": "SD1_D1"}], "warn": ""}, {"pin": 123, "sig": "GPIO37", "gpio": "GPIO37", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO37"}, {"mux": "1", "fn": "OUTPUTXBAR2"}, {"mux": "2", "fn": "EMIF1_OEn"}, {"mux": "6", "fn": "CANA_TX"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR6"}, {"mux": "9", "fn": "EMIF1_A2"}, {"mux": "10", "fn": "MCAN_TX"}, {"mux": "13", "fn": "SD1_D2"}], "warn": ""}, {"pin": 124, "sig": "GPIO38", "gpio": "GPIO38", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO38"}, {"mux": "2", "fn": "EMIF1_A0"}, {"mux": "5", "fn": "SCIC_TX"}, {"mux": "6", "fn": "CANB_TX"}, {"mux": "7", "fn": "CLB_OUTPUTXBAR7"}, {"mux": "9", "fn": "EMIF1_A3"}, {"mux": "10", "fn": "ENET_MII_RX_DV"}, {"mux": "11", "fn": "ENET_MII_CRS"}, {"mux": "13", "fn": "SD1_D3"}], "warn": ""}, {"pin": 125, "sig": "GPIO60", "gpio": "GPIO60", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO60"}, {"mux": "1", "fn": "MCLKRB"}, {"mux": "2", "fn": "EMIF1_D24"}, {"mux": "3", "fn": "EMIF2_D8"}, {"mux": "5", "fn": "OUTPUTXBAR3"}, {"mux": "6", "fn": "SPIB_SIMO"}, {"mux": "7", "fn": "SD2_D3"}, {"mux": "9", "fn": "EMIF1_D5"}, {"mux": "10", "fn": "ESC_LED_ERR"}, {"mux": "11", "fn": "ENET_MII_TX_DATA1"}, {"mux": "13", "fn": "SD2_C4"}, {"mux": "14", "fn": "FSIRXB_CLK"}, {"mux": "15", "fn": "SPIA_CLK"}], "warn": ""}, {"pin": 126, "sig": "GPIO61", "gpio": "GPIO61", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO61"}, {"mux": "1", "fn": "MFSRB"}, {"mux": "2", "fn": "EMIF1_D23"}, {"mux": "3", "fn": "EMIF2_D7"}, {"mux": "5", "fn": "OUTPUTXBAR4"}, {"mux": "6", "fn": "SPIB_SOMI"}, {"mux": "7", "fn": "SD2_C3"}, {"mux": "9", "fn": "EMIF1_D6"}, {"mux": "10", "fn": "ESC_LED_RUN"}, {"mux": "11", "fn": "ENET_MII_TX_DATA2"}, {"mux": "14", "fn": "CANA_RX"}, {"mux": "15", "fn": "SPIA_STEn"}], "warn": ""}, {"pin": 127, "sig": "GPIO62", "gpio": "GPIO62", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO62"}, {"mux": "1", "fn": "SCIC_RX"}, {"mux": "2", "fn": "EMIF1_D22"}, {"mux": "3", "fn": "EMIF2_D6"}, {"mux": "5", "fn": "EQEP3_A"}, {"mux": "6", "fn": "CANA_RX"}, {"mux": "7", "fn": "SD2_D4"}, {"mux": "9", "fn": "EMIF1_D7"}, {"mux": "10", "fn": "ESC_LED_STATE_RUN"}, {"mux": "11", "fn": "ENET_MII_TX_DATA3"}, {"mux": "14", "fn": "CANA_TX"}], "warn": ""}, {"pin": 128, "sig": "GPIO63", "gpio": "GPIO63", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO63"}, {"mux": "1", "fn": "SCIC_TX"}, {"mux": "2", "fn": "EMIF1_D21"}, {"mux": "3", "fn": "EMIF2_D5"}, {"mux": "5", "fn": "EQEP3_B"}, {"mux": "6", "fn": "CANA_TX"}, {"mux": "7", "fn": "SD2_C4"}, {"mux": "9", "fn": "SSIA_TX"}, {"mux": "11", "fn": "ENET_MII_RX_DATA0"}, {"mux": "13", "fn": "SD1_D1"}, {"mux": "14", "fn": "ESC_RX1_DATA0"}, {"mux": "15", "fn": "SPIB_SIMO"}], "warn": ""}, {"pin": 129, "sig": "GPIO64", "gpio": "GPIO64", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO64"}, {"mux": "2", "fn": "EMIF1_D20"}, {"mux": "3", "fn": "EMIF2_D4"}, {"mux": "5", "fn": "EQEP3_STROBE"}, {"mux": "6", "fn": "SCIA_RX"}, {"mux": "9", "fn": "SSIA_RX"}, {"mux": "10", "fn": "ENET_MII_RX_DV"}, {"mux": "11", "fn": "ENET_MII_RX_DATA1"}, {"mux": "13", "fn": "SD1_C1"}, {"mux": "14", "fn": "ESC_RX1_DATA1"}, {"mux": "15", "fn": "SPIB_SOMI"}], "warn": ""}, {"pin": 130, "sig": "GPIO65", "gpio": "GPIO65", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO65"}, {"mux": "2", "fn": "EMIF1_D19"}, {"mux": "3", "fn": "EMIF2_D3"}, {"mux": "5", "fn": "EQEP3_INDEX"}, {"mux": "6", "fn": "SCIA_TX"}, {"mux": "9", "fn": "SSIA_CLK"}, {"mux": "10", "fn": "ENET_MII_RX_ERR"}, {"mux": "11", "fn": "ENET_MII_RX_DATA2"}, {"mux": "13", "fn": "SD1_D2"}, {"mux": "14", "fn": "ESC_RX1_DATA2"}, {"mux": "15", "fn": "SPIB_CLK"}], "warn": ""}, {"pin": 131, "sig": "GPIO66", "gpio": "GPIO66", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO66"}, {"mux": "2", "fn": "EMIF1_D18"}, {"mux": "3", "fn": "EMIF2_D2"}, {"mux": "6", "fn": "I2CB_SDA"}, {"mux": "9", "fn": "SSIA_FSS"}, {"mux": "10", "fn": "ENET_MII_RX_DATA0"}, {"mux": "11", "fn": "ENET_MII_RX_DATA3"}, {"mux": "13", "fn": "SD1_C2"}, {"mux": "14", "fn": "ESC_RX1_DATA3"}, {"mux": "15", "fn": "SPIB_STEn"}], "warn": ""}, {"pin": 132, "sig": "GPIO67", "gpio": "GPIO67", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO67"}, {"mux": "2", "fn": "EMIF1_D17"}, {"mux": "3", "fn": "EMIF2_D1"}, {"mux": "10", "fn": "ENET_MII_RX_CLK"}, {"mux": "11", "fn": "ENET_REVMII_MDIO_RST"}, {"mux": "13", "fn": "SD1_D3"}], "warn": ""}, {"pin": 133, "sig": "GPIO68", "gpio": "GPIO68", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO68"}, {"mux": "2", "fn": "EMIF1_D16"}, {"mux": "3", "fn": "EMIF2_D0"}, {"mux": "11", "fn": "ENET_MII_INTR"}, {"mux": "13", "fn": "SD1_C3"}, {"mux": "14", "fn": "ESC_PHY1_LINKSTATUS"}], "warn": ""}, {"pin": 134, "sig": "GPIO69", "gpio": "GPIO69", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO69"}, {"mux": "2", "fn": "EMIF1_D15"}, {"mux": "6", "fn": "I2CB_SCL"}, {"mux": "10", "fn": "ENET_MII_TX_EN"}, {"mux": "11", "fn": "ENET_MII_RX_CLK"}, {"mux": "13", "fn": "SD1_D4"}, {"mux": "14", "fn": "ESC_RX1_CLK"}, {"mux": "15", "fn": "SPIC_SIMO"}], "warn": ""}, {"pin": 137, "sig": "GPIO70", "gpio": "GPIO70", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO70"}, {"mux": "2", "fn": "EMIF1_D14"}, {"mux": "5", "fn": "CANA_RX"}, {"mux": "6", "fn": "SCIB_TX"}, {"mux": "9", "fn": "MCAN_RX"}, {"mux": "11", "fn": "ENET_MII_RX_DV"}, {"mux": "13", "fn": "SD1_C4"}, {"mux": "14", "fn": "ESC_RX1_DV"}, {"mux": "15", "fn": "SPIC_SOMI"}], "warn": ""}, {"pin": 138, "sig": "GPIO71", "gpio": "GPIO71", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO71"}, {"mux": "2", "fn": "EMIF1_D13"}, {"mux": "5", "fn": "CANA_TX"}, {"mux": "6", "fn": "SCIB_RX"}, {"mux": "9", "fn": "MCAN_TX"}, {"mux": "10", "fn": "ENET_MII_RX_DATA0"}, {"mux": "11", "fn": "ENET_MII_RX_ERR"}, {"mux": "14", "fn": "ESC_RX1_ERR"}, {"mux": "15", "fn": "SPIC_CLK"}], "warn": ""}, {"pin": 139, "sig": "GPIO72#", "gpio": "GPIO72", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO72"}, {"mux": "2", "fn": "EMIF1_D12"}, {"mux": "5", "fn": "CANB_TX"}, {"mux": "6", "fn": "SCIC_TX"}, {"mux": "10", "fn": "ENET_MII_RX_DATA1"}, {"mux": "11", "fn": "ENET_MII_TX_DATA3"}, {"mux": "14", "fn": "ESC_TX1_DATA3"}, {"mux": "15", "fn": "SPIC_STEn"}], "warn": "BOOT MODE PIN \u2014 Must stay HIGH at reset!"}, {"pin": 140, "sig": "GPIO73", "gpio": "GPIO73", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO73"}, {"mux": "2", "fn": "EMIF1_D11"}, {"mux": "3", "fn": "XCLKOUT"}, {"mux": "5", "fn": "CANB_RX"}, {"mux": "6", "fn": "SCIC_RX"}, {"mux": "10", "fn": "ENET_RMII_CLK"}, {"mux": "11", "fn": "ENET_MII_TX_DATA2"}, {"mux": "13", "fn": "SD2_D2"}, {"mux": "14", "fn": "ESC_TX1_DATA2"}], "warn": ""}, {"pin": 141, "sig": "GPIO74", "gpio": "GPIO74", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO74"}, {"mux": "2", "fn": "EMIF1_D10"}, {"mux": "9", "fn": "MCAN_TX"}, {"mux": "11", "fn": "ENET_MII_TX_DATA1"}, {"mux": "13", "fn": "SD2_C2"}, {"mux": "14", "fn": "ESC_TX1_DATA1"}], "warn": ""}, {"pin": 142, "sig": "GPIO126", "gpio": "GPIO126", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO126"}, {"mux": "3", "fn": "EMIF2_D11"}, {"mux": "7", "fn": "SD1_D3"}, {"mux": "10", "fn": "ESC_GPI26"}, {"mux": "13", "fn": "FSIRXE_CLK"}, {"mux": "14", "fn": "ESC_LATCH1"}], "warn": ""}, {"pin": 143, "sig": "GPIO76", "gpio": "GPIO76", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO76"}, {"mux": "2", "fn": "EMIF1_D8"}, {"mux": "6", "fn": "SCID_TX"}, {"mux": "10", "fn": "ENET_MII_RX_ERR"}, {"mux": "13", "fn": "SD2_C3"}, {"mux": "14", "fn": "ESC_PHY_RESETn"}], "warn": ""}, {"pin": 144, "sig": "GPIO77", "gpio": "GPIO77", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO77"}, {"mux": "2", "fn": "EMIF1_D7"}, {"mux": "6", "fn": "SCID_RX"}, {"mux": "13", "fn": "SD2_D4"}, {"mux": "14", "fn": "ESC_RX0_CLK"}], "warn": ""}, {"pin": 145, "sig": "GPIO78", "gpio": "GPIO78", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO78"}, {"mux": "2", "fn": "EMIF1_D6"}, {"mux": "6", "fn": "EQEP2_A"}, {"mux": "13", "fn": "SD2_C4"}, {"mux": "14", "fn": "ESC_RX0_DV"}], "warn": ""}, {"pin": 146, "sig": "GPIO79", "gpio": "GPIO79", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO79"}, {"mux": "2", "fn": "EMIF1_D5"}, {"mux": "6", "fn": "EQEP2_B"}, {"mux": "13", "fn": "SD2_D1"}, {"mux": "14", "fn": "ESC_RX0_ERR"}], "warn": ""}, {"pin": 147, "sig": "GPIO80", "gpio": "GPIO80", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO80"}, {"mux": "2", "fn": "EMIF1_D4"}, {"mux": "6", "fn": "EQEP2_STROBE"}, {"mux": "13", "fn": "SD2_C1"}, {"mux": "14", "fn": "ESC_RX0_DATA0"}], "warn": ""}, {"pin": 148, "sig": "GPIO81", "gpio": "GPIO81", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO81"}, {"mux": "2", "fn": "EMIF1_D3"}, {"mux": "6", "fn": "EQEP2_INDEX"}, {"mux": "14", "fn": "ESC_RX0_DATA1"}], "warn": ""}, {"pin": 149, "sig": "GPIO82", "gpio": "GPIO82", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO82"}, {"mux": "2", "fn": "EMIF1_D2"}, {"mux": "14", "fn": "ESC_RX0_DATA2"}], "warn": ""}, {"pin": 150, "sig": "GPIO83", "gpio": "GPIO83", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO83"}, {"mux": "2", "fn": "EMIF1_D1"}, {"mux": "14", "fn": "ESC_RX0_DATA3"}], "warn": ""}, {"pin": 151, "sig": "GPIO84#", "gpio": "GPIO84", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO84"}, {"mux": "5", "fn": "SCIA_TX"}, {"mux": "6", "fn": "MDXB"}, {"mux": "11", "fn": "UARTA_TX"}, {"mux": "14", "fn": "ESC_TX0_ENA"}, {"mux": "15", "fn": "MDXA"}], "warn": "BOOT MODE PIN \u2014 Must stay HIGH at reset!"}, {"pin": 152, "sig": "GPIO85", "gpio": "GPIO85", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO85"}, {"mux": "2", "fn": "EMIF1_D0"}, {"mux": "5", "fn": "SCIA_RX"}, {"mux": "6", "fn": "MDRB"}, {"mux": "11", "fn": "UARTA_RX"}, {"mux": "14", "fn": "ESC_TX0_CLK"}, {"mux": "15", "fn": "MDRA"}], "warn": ""}, {"pin": 153, "sig": "GPIO86", "gpio": "GPIO86", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO86"}, {"mux": "2", "fn": "EMIF1_A13"}, {"mux": "3", "fn": "EMIF1_CAS"}, {"mux": "5", "fn": "SCIB_TX"}, {"mux": "6", "fn": "MCLKXB"}, {"mux": "14", "fn": "ESC_PHY0_LINKSTATUS"}, {"mux": "15", "fn": "MCLKXA"}], "warn": ""}, {"pin": 154, "sig": "GPIO87", "gpio": "GPIO87", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO87"}, {"mux": "2", "fn": "EMIF1_A14"}, {"mux": "3", "fn": "EMIF1_RAS"}, {"mux": "5", "fn": "SCIB_RX"}, {"mux": "6", "fn": "MFSXB"}, {"mux": "9", "fn": "EMIF1_DQM3"}, {"mux": "14", "fn": "ESC_TX0_DATA0"}, {"mux": "15", "fn": "MFSXA"}], "warn": ""}, {"pin": 155, "sig": "GPIO88", "gpio": "GPIO88", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO88"}, {"mux": "2", "fn": "EMIF1_A15"}, {"mux": "3", "fn": "EMIF1_DQM0"}, {"mux": "9", "fn": "EMIF1_DQM1"}, {"mux": "14", "fn": "ESC_TX0_DATA1"}], "warn": ""}, {"pin": 156, "sig": "GPIO89", "gpio": "GPIO89", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO89"}, {"mux": "2", "fn": "EMIF1_A16"}, {"mux": "3", "fn": "EMIF1_DQM1"}, {"mux": "6", "fn": "SCIC_TX"}, {"mux": "9", "fn": "EMIF1_CAS"}, {"mux": "14", "fn": "ESC_TX0_DATA2"}], "warn": ""}, {"pin": 159, "sig": "GPIO90", "gpio": "GPIO90", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO90"}, {"mux": "2", "fn": "EMIF1_A17"}, {"mux": "3", "fn": "EMIF1_DQM2"}, {"mux": "6", "fn": "SCIC_RX"}, {"mux": "9", "fn": "EMIF1_RAS"}, {"mux": "14", "fn": "ESC_TX0_DATA3"}], "warn": ""}, {"pin": 160, "sig": "GPIO91", "gpio": "GPIO91", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO91"}, {"mux": "2", "fn": "EMIF1_A18"}, {"mux": "3", "fn": "EMIF1_DQM3"}, {"mux": "6", "fn": "I2CA_SDA"}, {"mux": "9", "fn": "EMIF1_DQM2"}, {"mux": "10", "fn": "PMBUSA_SCL"}, {"mux": "11", "fn": "SSIA_TX"}, {"mux": "13", "fn": "FSIRXF_D0"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR1"}, {"mux": "15", "fn": "SPID_SIMO"}], "warn": ""}, {"pin": 161, "sig": "GPIO92", "gpio": "GPIO92", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO92"}, {"mux": "2", "fn": "EMIF1_A19"}, {"mux": "3", "fn": "EMIF1_BA1"}, {"mux": "6", "fn": "I2CA_SCL"}, {"mux": "9", "fn": "EMIF1_DQM0"}, {"mux": "10", "fn": "PMBUSA_SDA"}, {"mux": "11", "fn": "SSIA_RX"}, {"mux": "13", "fn": "FSIRXF_D1"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR2"}, {"mux": "15", "fn": "SPID_SOMI"}], "warn": ""}, {"pin": 162, "sig": "GPIO93", "gpio": "GPIO93", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO93"}, {"mux": "3", "fn": "EMIF1_BA0"}, {"mux": "6", "fn": "SCID_TX"}, {"mux": "10", "fn": "PMBUSA_ALERT"}, {"mux": "11", "fn": "SSIA_CLK"}, {"mux": "13", "fn": "FSIRXF_CLK"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR3"}, {"mux": "15", "fn": "SPID_CLK"}], "warn": ""}, {"pin": 163, "sig": "GPIO94", "gpio": "GPIO94", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO94"}, {"mux": "6", "fn": "SCID_RX"}, {"mux": "9", "fn": "EMIF1_BA1"}, {"mux": "10", "fn": "PMBUSA_CTL"}, {"mux": "11", "fn": "SSIA_FSS"}, {"mux": "13", "fn": "FSIRXG_D0"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR4"}, {"mux": "15", "fn": "SPID_STEn"}], "warn": ""}, {"pin": 164, "sig": "GPIO133", "gpio": "GPIO133", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO133"}, {"mux": "7", "fn": "SD2_C2"}, {"mux": "ALT", "fn": "AUXCLKIN"}], "warn": ""}, {"pin": 165, "sig": "GPIO127", "gpio": "GPIO127", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO127"}, {"mux": "3", "fn": "EMIF2_D10"}, {"mux": "7", "fn": "SD1_C3"}, {"mux": "10", "fn": "ESC_GPI27"}, {"mux": "14", "fn": "ESC_SYNC0"}], "warn": ""}, {"pin": 166, "sig": "GPIO128", "gpio": "GPIO128", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO128"}, {"mux": "3", "fn": "EMIF2_D9"}, {"mux": "7", "fn": "SD1_D4"}, {"mux": "10", "fn": "ESC_GPI28"}, {"mux": "14", "fn": "ESC_SYNC1"}], "warn": ""}, {"pin": 167, "sig": "GPIO147", "gpio": "GPIO147", "group": "PWM", "default_fn": "GPIO", "options": [{"mux": "1", "fn": "EPWM2A"}, {"mux": "0", "fn": "GPIO147"}, {"mux": "10", "fn": "ESC_GPO14"}, {"mux": "14", "fn": "ESC_LED_STATE_RUN"}], "warn": ""}, {"pin": 168, "sig": "GPIO95", "gpio": "GPIO95", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO95"}, {"mux": "3", "fn": "EMIF2_A12"}, {"mux": "13", "fn": "FSIRXG_D1"}, {"mux": "14", "fn": "CLB_OUTPUTXBAR5"}], "warn": ""}, {"pin": 169, "sig": "GPIO104", "gpio": "GPIO104", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO104"}, {"mux": "1", "fn": "I2CA_SDA"}, {"mux": "3", "fn": "EMIF2_A6"}, {"mux": "5", "fn": "EQEP3_A"}, {"mux": "6", "fn": "SCID_TX"}, {"mux": "10", "fn": "ESC_GPI4"}, {"mux": "11", "fn": "CM-I2CA_SDA"}, {"mux": "13", "fn": "FSIRXA_D1"}], "warn": ""}, {"pin": 170, "sig": "GPIO107", "gpio": "GPIO107", "group": "DIGITAL", "default_fn": "GPIO", "options": [{"mux": "0", "fn": "GPIO107"}, {"mux": "3", "fn": "EMIF2_A9"}, {"mux": "5", "fn": "EQEP3_INDEX"}, {"mux": "6", "fn": "SCIC_RX"}, {"mux": "10", "fn": "ESC_GPI7"}, {"mux": "13", "fn": "FSITXB_D1"}, {"mux": "14", "fn": "ENET_REVMII_MDIO_RST"}], "warn": ""}];
+
+    function inferDefaultDir(fn, label, isGpio) {
+      if (!isGpio) return 'ANALOG';
+      const uFn = String(fn || '').toUpperCase();
+      const uLbl = String(label || '').toUpperCase();
+      if (uFn.includes('DAC')) return 'OUT';
+      if (uFn.startsWith('EPWM') || uFn.startsWith('OUTPUTXBAR') || uFn.startsWith('CLB_OUTPUTXBAR')) return 'OUT';
+      if (uFn.endsWith('_TX') || uFn.includes('SIMO') || uFn.includes('_CLK') || uFn.includes('_STE') || uFn.includes('_FSS')) return 'OUT';
+      if (uFn.endsWith('_RX') || uFn.includes('SOMI') || uFn.startsWith('EQEP') || uFn.startsWith('SD1_') || uFn.startsWith('SD2_')) return 'IN';
+      if (uLbl.includes('LED') || uLbl.includes('OUT') || uLbl.includes('EN') || uLbl.includes('PWM') || uLbl.includes('TX')) return 'OUT';
+      if (uLbl.includes('FAULT') || uLbl.includes('TZ') || uLbl.includes('IN') || uLbl.includes('RX')) return 'IN';
+      return 'OUT';
+    }
+
+    // State: map of pin_num -> { pin, mux, fn, label, dir }
+    let pickedPins = {};
+    let activeCat = 'ALL';
+
+    function toast(msg) {
+      const el = document.getElementById('toastBox');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(window._t);
+      window._t = setTimeout(() => el.classList.add('hidden'), 2400);
+    }
+
+    function getConflicts() {
+      const warnings = [];
+      const fnUsed = {};
+      Object.values(pickedPins).forEach(pk => {
+        if (pk.mux !== '0' && pk.mux !== 'ANALOG') {
+          if (!fnUsed[pk.fn]) fnUsed[pk.fn] = [];
+          fnUsed[pk.fn].push(pk.pin);
+        }
+        const meta = USABLE_PINS.find(u => u.pin === pk.pin);
+        if (meta && meta.warn) {
+          if (pk.pin === 82 && pk.fn !== 'GPIO31') {
+            warnings.push(`Pin 82 (${pk.fn}): Shares physical trace with onboard LED1.`);
+          } else if ((pk.pin === 76 || pk.pin === 78) && !pk.fn.startsWith('SCIA')) {
+            warnings.push(`Pin ${pk.pin} (${pk.fn}): Disables onboard XDS110 USB-UART debug console.`);
+          } else if (pk.pin === 139 || pk.pin === 151) {
+            warnings.push(`Pin ${pk.pin} (${meta.gpio}): Boot Mode pin — keep HIGH during reset!`);
+          }
+        }
+      });
+      Object.keys(fnUsed).forEach(fn => {
+        if (fnUsed[fn].length > 1) {
+          warnings.push(`Duplicate Peripheral Conflict: ${fn} is selected on HSEC Pins ${fnUsed[fn].join(' & ')}.`);
+        }
+      });
+      return warnings;
+    }
+
+    function renderChecklist() {
+      const q = (document.getElementById('quickSearchInput').value || '').trim().toLowerCase();
+      const container = document.getElementById('pinChecklistContainer');
+
+      const filtered = USABLE_PINS.filter(p => {
+        const isRes = !!pickedPins[p.pin];
+        if (activeCat === 'RESERVED' && !isRes) return false;
+        if (activeCat === 'ANALOG' && p.group !== 'ANALOG') return false;
+        if (activeCat === 'PWM' && p.group !== 'PWM') return false;
+        if (activeCat === 'DIGITAL' && p.group !== 'DIGITAL') return false;
+
+        if (!q) return true;
+        const optStr = p.options.map(o => o.fn).join(' ');
+        const lbl = isRes ? pickedPins[p.pin].label : '';
+        return (`pin ${p.pin} ${p.sig} ${p.gpio || ''} ${optStr} ${lbl}`).toLowerCase().includes(q);
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="py-10 text-center text-xs text-slate-400">No pins reserved yet. Check any pin in the All / Analog / ePWM / Digital tabs to reserve it.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(p => {
+        const res = pickedPins[p.pin];
+        const selFn = res ? `${res.mux}:${res.fn}` : `${p.options[0].mux}:${p.options[0].fn}`;
+        const defaultLabel = res ? res.label : `PIN_${p.options[0].fn.split(' ')[0].replace(/[^A-Za-z0-9_]/g, '_')}`;
+
+        const optsHtml = p.options.map(o => {
+          const val = `${o.mux}:${o.fn}`;
+          const muxPrefix = o.mux === 'ANALOG' ? '' : `[Mux ${o.mux}] `;
+          return `<option value="${val}" ${val === selFn ? 'selected' : ''}>${muxPrefix}${o.fn}</option>`;
+        }).join('');
+
+        return `
+          <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-3 py-2 rounded-xl border transition ${
+            res ? 'bg-emerald-950/30 border-emerald-600/70' : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
+          }">
+            <div class="flex items-center gap-2.5 min-w-[145px]">
+              <input type="checkbox" data-toggle-pin="${p.pin}" ${res ? 'checked' : ''} aria-label="Reserve HSEC Pin ${p.pin}" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer">
+              <div>
+                <div class="text-xs font-bold text-white mono">Pin #${p.pin} · <span class="text-slate-300">${p.sig}</span></div>
+                <div class="text-[10px] text-slate-400">${p.warn ? `<span class="text-amber-300">⚠ ${p.warn}</span>` : p.default_fn}</div>
+              </div>
+            </div>
+
+            <div class="flex-1 flex flex-wrap sm:flex-nowrap items-center gap-2">
+              <select data-fn-pin="${p.pin}" aria-label="Function for HSEC Pin ${p.pin}" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white mono focus:outline-none focus:border-emerald-500">
+                ${optsHtml}
+              </select>
+              ${p.gpio ? `
+                <select data-dir-pin="${p.pin}" aria-label="GPIO Direction for HSEC Pin ${p.pin}" title="GPIO Direction (IN = GPIO_DIR_MODE_IN, OUT = GPIO_DIR_MODE_OUT)" class="w-24 bg-slate-900 border ${((res && res.dir) || inferDefaultDir(p.options[0].fn, defaultLabel, true)) === 'OUT' ? 'border-purple-600/80 text-purple-300' : 'border-sky-600/80 text-sky-300'} rounded-lg px-2 py-1.5 text-xs font-bold mono focus:outline-none focus:border-emerald-500">
+                  <option value="OUT" ${((res && res.dir) || inferDefaultDir(p.options[0].fn, defaultLabel, true)) === 'OUT' ? 'selected' : ''}>DIR: OUT</option>
+                  <option value="IN" ${((res && res.dir) || inferDefaultDir(p.options[0].fn, defaultLabel, true)) === 'IN' ? 'selected' : ''}>DIR: IN</option>
+                </select>
+              ` : `
+                <span class="w-24 text-center px-2 py-1.5 rounded-lg bg-slate-900/90 border border-amber-700/50 text-[11px] font-semibold text-amber-300 mono">${(res && res.fn && res.fn.includes('DAC')) ? 'ANA: OUT' : 'ANA: IN'}</span>
+              `}
+              <input type="text" data-label-pin="${p.pin}" value="${defaultLabel}" placeholder="Wire label..." aria-label="Wire label for HSEC Pin ${p.pin}" class="w-32 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-emerald-300 mono focus:outline-none focus:border-emerald-500">
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function generateMinimalCode() {
+      const list = Object.values(pickedPins).sort((a, b) => a.pin - b.pin);
+      const lines = [
+        '// ============================================================================',
+        '// Minimal Copy-Paste Pin Configuration for TMDSCNCD28388D (TMS320F28388D)',
+        '// ============================================================================',
+        '#include "driverlib.h"',
+        '#include "device.h"',
+        ''
+      ];
+
+      // 1. Macros
+      list.forEach(pk => {
+        const meta = USABLE_PINS.find(u => u.pin === pk.pin);
+        const cleanLbl = (pk.label || `PIN_${pk.pin}`).toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+        if (meta && meta.gpio) {
+          const gNum = meta.gpio.replace('GPIO', '');
+          lines.push(`#define ${cleanLbl}_GPIO    (${gNum}U)   // HSEC Pin #${pk.pin} (${pk.fn})`);
+        } else {
+          lines.push(`#define ${cleanLbl}_HSEC    (${pk.pin}U)   // HSEC Pin #${pk.pin} (${pk.fn})`);
+        }
+      });
+
+      lines.push('');
+      lines.push('void init_my_pins(void)');
+      lines.push('{');
+      lines.push('    Device_initGPIO();');
+      lines.push('    EALLOW;');
+      lines.push('');
+
+      list.forEach(pk => {
+        const meta = USABLE_PINS.find(u => u.pin === pk.pin);
+        const cleanLbl = (pk.label || `PIN_${pk.pin}`).toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+        if (meta && meta.gpio) {
+          const gNum = meta.gpio.replace('GPIO', '');
+          const cfgMacro = `GPIO_${gNum}_${pk.fn.replace(/[^A-Za-z0-9_]/g, '_')}`;
+          const effDir = pk.dir || inferDefaultDir(pk.fn, cleanLbl, true);
+          const dirMacro = effDir === 'OUT' ? 'GPIO_DIR_MODE_OUT' : 'GPIO_DIR_MODE_IN';
+          const padMacro = effDir === 'OUT' ? 'GPIO_PIN_TYPE_STD' : 'GPIO_PIN_TYPE_PULLUP';
+          lines.push(`    // HSEC Pin #${pk.pin} (${meta.gpio}) -> ${cleanLbl} | [Mux ${pk.mux}] ${pk.fn} | Dir: ${effDir}`);
+          lines.push(`    GPIO_setPinConfig(${cfgMacro});`);
+          lines.push(`    GPIO_setDirectionMode(${cleanLbl}_GPIO, ${dirMacro});`);
+          lines.push(`    GPIO_setPadConfig(${cleanLbl}_GPIO, ${padMacro});`);
+          lines.push(`    GPIO_lockPortConfig(GPIO_PORT_A + (${cleanLbl}_GPIO >> 5U), (1UL << (${cleanLbl}_GPIO & 0x1FU)));`);
+          lines.push('');
+        } else {
+          lines.push(`    // HSEC Pin #${pk.pin} -> ${cleanLbl} (${pk.fn} - Dedicated Analog Pin)`);
+        }
+      });
+
+      lines.push('    EDIS;');
+      lines.push('}');
+      return lines.join('\n');
+    }
+
+    function renderOutputs() {
+      const list = Object.values(pickedPins).sort((a, b) => a.pin - b.pin);
+      const tbody = document.getElementById('wiringTableBody');
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500 font-sans">No pins selected yet.</td></tr>`;
+      } else {
+        tbody.innerHTML = list.map(pk => {
+          const meta = USABLE_PINS.find(u => u.pin === pk.pin);
+          const badgeColor = meta && meta.group === 'ANALOG'
+            ? 'text-amber-300'
+            : (meta && meta.group === 'PWM' ? 'text-purple-300' : 'text-sky-300');
+          const effDir = (meta && meta.gpio)
+            ? (pk.dir || inferDefaultDir(pk.fn, pk.label, true))
+            : (pk.fn && pk.fn.includes('DAC') ? 'OUT' : 'IN');
+          const dirBadge = effDir === 'OUT'
+            ? '<span class="px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-700/60 text-[10px] font-bold">OUT</span>'
+            : '<span class="px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-700/60 text-[10px] font-bold">IN</span>';
+          return `
+            <tr class="hover:bg-slate-900/80">
+              <td class="py-2 px-3 font-bold text-white">Pin #${pk.pin}</td>
+              <td class="py-2 px-3 font-bold text-emerald-400">${pk.label}</td>
+              <td class="py-2 px-3">${dirBadge}</td>
+              <td class="py-2 px-3 ${badgeColor}">${meta ? meta.sig : ''} → ${pk.fn}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('simpleCodePre').textContent = generateMinimalCode();
+    }
+
+    function renderAll() {
+      const list = Object.values(pickedPins);
+      const analogCount = list.filter(x => {
+        const m = USABLE_PINS.find(u => u.pin === x.pin);
+        return m && m.group === 'ANALOG';
+      }).length;
+      const pwmCount = list.filter(x => {
+        const m = USABLE_PINS.find(u => u.pin === x.pin);
+        return m && m.group === 'PWM';
+      }).length;
+
+      document.getElementById('countTotal').textContent = String(list.length);
+      document.getElementById('countAnalog').textContent = String(analogCount);
+      document.getElementById('countPwm').textContent = String(pwmCount);
+
+      const conflicts = getConflicts();
+      const cBox = document.getElementById('simpleConflictBox');
+      if (conflicts.length > 0) {
+        cBox.innerHTML = conflicts.map(c => `<div>⚠ ${c}</div>`).join('');
+        cBox.classList.remove('hidden');
+      } else {
+        cBox.classList.add('hidden');
+      }
+
+      renderChecklist();
+      renderOutputs();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderAll();
+
+      // Clear all
+      document.getElementById('btnClearAll').addEventListener('click', () => {
+        pickedPins = {};
+        renderAll();
+        toast('Cleared all pins.');
+      });
+
+      // Category buttons
+      document.querySelectorAll('.cat-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          activeCat = btn.dataset.cat;
+          document.querySelectorAll('.cat-btn').forEach(b => {
+            b.classList.remove('bg-emerald-600', 'text-white');
+            b.classList.add('bg-slate-800');
+          });
+          btn.classList.remove('bg-slate-800');
+          btn.classList.add('bg-emerald-600', 'text-white');
+          renderChecklist();
+        });
+      });
+
+      // Search input
+      document.getElementById('quickSearchInput').addEventListener('input', renderChecklist);
+
+      // Checklist interactions (checkbox, function dropdown, GPIO direction, wire label)
+      document.getElementById('pinChecklistContainer').addEventListener('change', (e) => {
+        const togglePin = e.target.dataset.togglePin;
+        if (togglePin) {
+          const pinNum = parseInt(togglePin, 10);
+          if (e.target.checked) {
+            const row = e.target.closest('div.rounded-xl');
+            const sel = row.querySelector(`[data-fn-pin="${pinNum}"]`).value;
+            const lbl = row.querySelector(`[data-label-pin="${pinNum}"]`).value.trim() || `PIN_${pinNum}`;
+            const dirEl = row.querySelector(`[data-dir-pin="${pinNum}"]`);
+            const [mux, fn] = sel.split(':');
+            const dir = dirEl ? dirEl.value : inferDefaultDir(fn, lbl, false);
+            pickedPins[pinNum] = { pin: pinNum, mux, fn, label: lbl, dir };
+          } else {
+            delete pickedPins[pinNum];
+          }
+          renderAll();
+          return;
+        }
+
+        const fnPin = e.target.dataset.fnPin;
+        if (fnPin) {
+          const pinNum = parseInt(fnPin, 10);
+          const [mux, fn] = e.target.value.split(':');
+          const meta = USABLE_PINS.find(u => u.pin === pinNum);
+          const row = e.target.closest('div.rounded-xl');
+          const lblInput = row.querySelector(`[data-label-pin="${pinNum}"]`);
+          const lbl = pickedPins[pinNum] ? pickedPins[pinNum].label : `PIN_${fn.split(' ')[0].replace(/[^A-Za-z0-9_]/g, '_')}`;
+          lblInput.value = lbl;
+          const dir = inferDefaultDir(fn, lbl, !!(meta && meta.gpio));
+          pickedPins[pinNum] = { pin: pinNum, mux, fn, label: lbl, dir };
+          renderAll();
+          return;
+        }
+
+        const dirPin = e.target.dataset.dirPin;
+        if (dirPin) {
+          const pinNum = parseInt(dirPin, 10);
+          const newDir = e.target.value;
+          const row = e.target.closest('div.rounded-xl');
+          const sel = row.querySelector(`[data-fn-pin="${pinNum}"]`).value;
+          const lbl = row.querySelector(`[data-label-pin="${pinNum}"]`).value.trim() || `PIN_${pinNum}`;
+          const [mux, fn] = sel.split(':');
+          pickedPins[pinNum] = { pin: pinNum, mux, fn, label: lbl, dir: newDir };
+          renderAll();
+        }
+      });
+
+      document.getElementById('pinChecklistContainer').addEventListener('input', (e) => {
+        const lblPin = e.target.dataset.labelPin;
+        if (lblPin) {
+          const pinNum = parseInt(lblPin, 10);
+          const row = e.target.closest('div.rounded-xl');
+          const sel = row.querySelector(`[data-fn-pin="${pinNum}"]`).value;
+          const dirEl = row.querySelector(`[data-dir-pin="${pinNum}"]`);
+          const [mux, fn] = sel.split(':');
+          const dir = (pickedPins[pinNum] && pickedPins[pinNum].dir) || (dirEl ? dirEl.value : 'OUT');
+          pickedPins[pinNum] = { pin: pinNum, mux, fn, label: e.target.value.trim() || `PIN_${pinNum}`, dir };
+          renderOutputs();
+        }
+      });
+
+      // Output view toggle
+      document.getElementById('btnOutWiring').addEventListener('click', () => {
+        document.getElementById('outWiringContainer').classList.remove('hidden');
+        document.getElementById('outCodeContainer').classList.add('hidden');
+        document.getElementById('btnOutWiring').className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-600 text-white';
+        document.getElementById('btnOutCode').className = 'px-2.5 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-white';
+      });
+      document.getElementById('btnOutCode').addEventListener('click', () => {
+        document.getElementById('outWiringContainer').classList.add('hidden');
+        document.getElementById('outCodeContainer').classList.remove('hidden');
+        document.getElementById('outCodeContainer').classList.add('flex');
+        document.getElementById('btnOutCode').className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-600 text-white';
+        document.getElementById('btnOutWiring').className = 'px-2.5 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-white';
+      });
+
+      // Copy & Download simple code
+      document.getElementById('btnCopySimpleCode').addEventListener('click', () => {
+        const text = document.getElementById('simpleCodePre').textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => toast('Copied C code to clipboard!'));
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          toast('Copied C code to clipboard!');
+        }
+      });
+
+      function generateWiringCsv() {
+        const list = Object.values(pickedPins).sort((a, b) => a.pin - b.pin);
+        const rows = [
+          ['HSEC_Pin', 'Wire_Label', 'Direction', 'MCU_Signal', 'GPIO', 'Selected_Function', 'Mux_Index', 'Domain', 'Hardware_Notes']
+        ];
+        list.forEach(pk => {
+          const meta = USABLE_PINS.find(u => u.pin === pk.pin) || {};
+          const effDir = meta.gpio
+            ? (pk.dir || inferDefaultDir(pk.fn, pk.label, true))
+            : (pk.fn && pk.fn.includes('DAC') ? 'OUT' : 'IN');
+          rows.push([
+            pk.pin,
+            pk.label || '',
+            effDir,
+            meta.sig || '',
+            meta.gpio || 'ANALOG',
+            pk.fn || '',
+            pk.mux || '',
+            meta.group || '',
+            meta.warn || meta.default_fn || ''
+          ]);
+        });
+        return rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+      }
+
+      document.getElementById('btnCopyWiringCsv').addEventListener('click', () => {
+        const csvText = generateWiringCsv();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(csvText).then(() => toast('Copied Bench Wiring CSV to clipboard!'));
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = csvText;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          toast('Copied Bench Wiring CSV to clipboard!');
+        }
+      });
+
+      function parseCsvLine(line) {
+        const result = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') {
+              cur += '"';
+              i++;
+            } else if (ch === '"') {
+              inQuotes = false;
+            } else {
+              cur += ch;
+            }
+          } else {
+            if (ch === '"') {
+              inQuotes = true;
+            } else if (ch === ',') {
+              result.push(cur.trim());
+              cur = '';
+            } else {
+              cur += ch;
+            }
+          }
+        }
+        result.push(cur.trim());
+        return result;
+      }
+
+      document.getElementById('inputImportWiringCsv').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = String(reader.result || '');
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+          if (lines.length < 2) {
+            toast('CSV file is empty or missing data rows.');
+            e.target.value = '';
+            return;
+          }
+          const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+          const idxPin = headers.findIndex(h => h === 'hsecpin' || h === 'pin' || h === 'pinnumber');
+          const idxLabel = headers.findIndex(h => h.includes('label') || h.includes('alias') || h.includes('wire') || h.includes('name'));
+          const idxDir = headers.findIndex(h => h.includes('dir') || h === 'io' || h === 'mode');
+          const idxFn = headers.findIndex(h => h.includes('function') || h.includes('selected') || h === 'fn');
+          const idxMux = headers.findIndex(h => h.includes('mux'));
+
+          const imported = {};
+          let count = 0;
+          for (let r = 1; r < lines.length; r++) {
+            const cols = parseCsvLine(lines[r]);
+            const rawPin = cols[idxPin >= 0 ? idxPin : 0] || '';
+            const pinNum = parseInt(String(rawPin).replace(/[^0-9]/g, ''), 10);
+            if (!pinNum) continue;
+            const meta = USABLE_PINS.find(u => u.pin === pinNum);
+            if (!meta) continue;
+
+            const rawLabel = (idxLabel >= 0 ? cols[idxLabel] : cols[1]) || '';
+            const rawDir = (idxDir >= 0 ? cols[idxDir] : '').toUpperCase();
+            const rawFn = (idxFn >= 0 ? cols[idxFn] : (cols[5] || cols[4] || '')) || '';
+            const rawMux = (idxMux >= 0 ? cols[idxMux] : (cols[6] || cols[5] || '')) || '';
+
+            // Match against valid options on this HSEC pin
+            let chosenOpt = meta.options.find(o => o.fn.toLowerCase() === rawFn.toLowerCase() && (!rawMux || o.mux.toLowerCase() === rawMux.toLowerCase()));
+            if (!chosenOpt && rawFn) {
+              chosenOpt = meta.options.find(o => o.fn.toLowerCase().includes(rawFn.toLowerCase()) || rawFn.toLowerCase().includes(o.fn.toLowerCase()));
+            }
+            if (!chosenOpt && rawMux) {
+              chosenOpt = meta.options.find(o => o.mux.toLowerCase() === rawMux.toLowerCase());
+            }
+            if (!chosenOpt) {
+              chosenOpt = meta.options[0];
+            }
+
+            const cleanLabel = rawLabel || `PIN_${chosenOpt.fn.split(' ')[0].replace(/[^A-Za-z0-9_]/g, '_')}`;
+            const parsedDir = (rawDir.includes('IN') ? 'IN' : (rawDir.includes('OUT') ? 'OUT' : inferDefaultDir(chosenOpt.fn, cleanLabel, !!meta.gpio)));
+            imported[pinNum] = {
+              pin: pinNum,
+              mux: chosenOpt.mux,
+              fn: chosenOpt.fn,
+              label: cleanLabel,
+              dir: parsedDir
+            };
+            count++;
+          }
+
+          if (count > 0) {
+            pickedPins = imported;
+            renderAll();
+            toast(`Imported ${count} pin reservation(s) from ${file.name}`);
+          } else {
+            toast('No valid HSEC signal pins found in CSV.');
+          }
+          e.target.value = '';
+        };
+        reader.readAsText(file);
+      });
+
+      document.getElementById('btnExportWiringCsv').addEventListener('click', () => {
+        const csvText = generateWiringCsv();
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tmdscncd28388d_bench_wiring_card.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast('Exported tmdscncd28388d_bench_wiring_card.csv');
+      });
+
+      document.getElementById('btnDownloadSimpleCode').addEventListener('click', () => {
+        const text = document.getElementById('simpleCodePre').textContent;
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'my_board_pins.h';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast('Downloaded my_board_pins.h');
+      });
+    });
+  </script>
+</body>
+</html>
